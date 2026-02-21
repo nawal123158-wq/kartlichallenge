@@ -1,0 +1,791 @@
+diff --git a/backend/server.py b/backend/server.py
+index 5809993..0963559 100644
+--- a/backend/server.py
++++ b/backend/server.py
+@@ -807,6 +807,9 @@ async def create_game(req: CreateGameRequest, current_user: User = Depends(get_c
+                 {"game_id": game["game_id"], "group_id": req.group_id, "invite_code": group["invite_code"], "action": "join_group_and_game"}
+             )
+     
++    # Remove _id field before returning
++    game.pop("_id", None)
++    
+     return game
+ 
+ # Join group and game from notification
+diff --git a/join_system_test.py b/join_system_test.py
+new file mode 100644
+index 0000000..271c453
+--- /dev/null
++++ b/join_system_test.py
+@@ -0,0 +1,476 @@
++#!/usr/bin/env python3
++"""
++Backend API Testing for Kartlı Challenge Game
++Testing the updated game flow with new join system
++"""
++
++import requests
++import json
++import time
++import subprocess
++import sys
++from datetime import datetime
++
++# Get backend URL from frontend .env
++def get_backend_url():
++    try:
++        with open('/app/frontend/.env', 'r') as f:
++            for line in f:
++                if line.startswith('EXPO_PUBLIC_BACKEND_URL='):
++                    return line.split('=', 1)[1].strip()
++    except:
++        pass
++    return "http://localhost:8001"
++
++BASE_URL = get_backend_url()
++API_BASE = f"{BASE_URL}/api"
++
++print(f"Testing backend at: {API_BASE}")
++
++class TestResults:
++    def __init__(self):
++        self.passed = 0
++        self.failed = 0
++        self.errors = []
++    
++    def success(self, test_name):
++        print(f"✅ {test_name}")
++        self.passed += 1
++    
++    def fail(self, test_name, error):
++        print(f"❌ {test_name}: {error}")
++        self.failed += 1
++        self.errors.append(f"{test_name}: {error}")
++    
++    def summary(self):
++        total = self.passed + self.failed
++        print(f"\n=== TEST SUMMARY ===")
++        print(f"Total: {total}, Passed: {self.passed}, Failed: {self.failed}")
++        if self.errors:
++            print("\nFAILED TESTS:")
++            for error in self.errors:
++                print(f"  - {error}")
++        return self.failed == 0
++
++def setup_test_data():
++    """Setup test users and friendship using MongoDB"""
++    print("\n=== SETTING UP TEST DATA ===")
++    
++    # Generate unique IDs
++    timestamp = int(time.time())
++    user1_id = f"user_admin_{timestamp}"
++    user2_id = f"user_friend_{timestamp}"
++    token1 = f"admin_token_{timestamp}"
++    token2 = f"friend_token_{timestamp}"
++    
++    mongo_script = f"""
++var user1Id = '{user1_id}';
++var user2Id = '{user2_id}';
++var token1 = '{token1}';
++var token2 = '{token2}';
++
++// Create admin user
++db.users.insertOne({{
++  user_id: user1Id,
++  email: 'admin@test.com',
++  name: 'Admin User',
++  player_id: 'PLRADMIN1',
++  created_at: new Date(),
++  weekly_score: 0,
++  total_score: 0
++}});
++
++// Create friend user (NOT in group yet)
++db.users.insertOne({{
++  user_id: user2Id,
++  email: 'friend@test.com', 
++  name: 'Friend User',
++  player_id: 'PLRFRND2',
++  created_at: new Date(),
++  weekly_score: 0,
++  total_score: 0
++}});
++
++// Create sessions
++db.user_sessions.insertOne({{
++  user_id: user1Id,
++  session_token: token1,
++  expires_at: new Date(Date.now() + 7*24*60*60*1000),
++  created_at: new Date()
++}});
++
++db.user_sessions.insertOne({{
++  user_id: user2Id,
++  session_token: token2,
++  expires_at: new Date(Date.now() + 7*24*60*60*1000),
++  created_at: new Date()
++}});
++
++// Make them friends
++db.friends.insertOne({{
++  friendship_id: 'fr_test_' + Date.now(),
++  user1_id: user1Id,
++  user2_id: user2Id,
++  created_at: new Date()
++}});
++
++print('TOKEN1 (admin): ' + token1);
++print('TOKEN2 (friend): ' + token2);
++print('USER1_ID: ' + user1Id);
++print('USER2_ID: ' + user2Id);
++"""
++    
++    try:
++        result = subprocess.run([
++            'mongosh', 'test_database', '--eval', mongo_script
++        ], capture_output=True, text=True, timeout=30)
++        
++        if result.returncode != 0:
++            print(f"MongoDB setup failed: {result.stderr}")
++            return None
++            
++        output_lines = result.stdout.strip().split('\n')
++        tokens = {}
++        for line in output_lines:
++            if 'TOKEN1 (admin):' in line:
++                tokens['admin_token'] = line.split(': ')[1].strip()
++            elif 'TOKEN2 (friend):' in line:
++                tokens['friend_token'] = line.split(': ')[1].strip()
++            elif 'USER1_ID:' in line:
++                tokens['admin_user_id'] = line.split(': ')[1].strip()
++            elif 'USER2_ID:' in line:
++                tokens['friend_user_id'] = line.split(': ')[1].strip()
++        
++        print(f"✅ Test data created successfully")
++        print(f"Admin token: {tokens.get('admin_token', 'NOT_FOUND')}")
++        print(f"Friend token: {tokens.get('friend_token', 'NOT_FOUND')}")
++        
++        return tokens
++        
++    except Exception as e:
++        print(f"❌ Failed to setup test data: {e}")
++        return None
++
++def test_game_flow_with_join_system():
++    """Test the complete game flow with new join system"""
++    results = TestResults()
++    
++    # Setup test data
++    test_data = setup_test_data()
++    if not test_data:
++        results.fail("Setup", "Failed to create test data")
++        return results
++    
++    admin_token = test_data['admin_token']
++    friend_token = test_data['friend_token']
++    admin_headers = {'Authorization': f'Bearer {admin_token}'}
++    friend_headers = {'Authorization': f'Bearer {friend_token}'}
++    
++    group_id = None
++    game_id = None
++    invite_code = None
++    notification_id = None
++    
++    try:
++        # Test 1: Admin creates group
++        print("\n=== TEST 1: Admin creates group ===")
++        response = requests.post(f"{API_BASE}/groups", 
++                               json={"name": "Test Game Group"}, 
++                               headers=admin_headers)
++        
++        if response.status_code == 200:
++            data = response.json()
++            group_id = data['group']['group_id']
++            invite_code = data['group']['invite_code']
++            results.success("Admin creates group")
++            print(f"Group ID: {group_id}")
++            print(f"Invite Code: {invite_code}")
++        else:
++            results.fail("Admin creates group", f"Status {response.status_code}: {response.text}")
++            return results
++        
++        # Test 2: Admin creates game (triggers invites to friends)
++        print("\n=== TEST 2: Admin creates game ===")
++        response = requests.post(f"{API_BASE}/games", 
++                               json={"group_id": group_id}, 
++                               headers=admin_headers)
++        
++        if response.status_code == 200:
++            data = response.json()
++            game_id = data['game_id']
++            results.success("Admin creates game")
++            print(f"Game ID: {game_id}")
++        else:
++            results.fail("Admin creates game", f"Status {response.status_code}: {response.text}")
++            return results
++        
++        # Wait a moment for notifications to be created
++        time.sleep(1)
++        
++        # Test 3: Check friend received notification
++        print("\n=== TEST 3: Check friend received notification ===")
++        response = requests.get(f"{API_BASE}/notifications", headers=friend_headers)
++        
++        if response.status_code == 200:
++            notifications = response.json()
++            game_invite_notif = None
++            
++            for notif in notifications:
++                if (notif.get('type') == 'game_invite' and 
++                    notif.get('data', {}).get('action') == 'join_group_and_game'):
++                    game_invite_notif = notif
++                    notification_id = notif['notification_id']
++                    break
++            
++            if game_invite_notif:
++                results.success("Friend received game invite notification")
++                print(f"Notification ID: {notification_id}")
++                print(f"Notification data: {game_invite_notif.get('data')}")
++            else:
++                results.fail("Friend received notification", "No game_invite notification with join_group_and_game action found")
++                print(f"Available notifications: {[n.get('type') for n in notifications]}")
++                return results
++        else:
++            results.fail("Friend received notification", f"Status {response.status_code}: {response.text}")
++            return results
++        
++        # Test 4: Friend accepts invite via notification
++        print("\n=== TEST 4: Friend accepts invite via notification ===")
++        response = requests.post(f"{API_BASE}/notifications/{notification_id}/accept-invite", 
++                               headers=friend_headers)
++        
++        if response.status_code == 200:
++            data = response.json()
++            results.success("Friend accepts invite via notification")
++            print(f"Response: {data}")
++        else:
++            results.fail("Friend accepts invite", f"Status {response.status_code}: {response.text}")
++            return results
++        
++        # Test 5: Verify friend is in group
++        print("\n=== TEST 5: Verify friend is in group ===")
++        response = requests.get(f"{API_BASE}/groups/{group_id}", headers=friend_headers)
++        
++        if response.status_code == 200:
++            group_data = response.json()
++            friend_in_group = any(member['user_id'] == test_data['friend_user_id'] 
++                                for member in group_data.get('members', []))
++            
++            if friend_in_group:
++                results.success("Friend is in group")
++                print(f"Group members: {len(group_data.get('members', []))}")
++            else:
++                results.fail("Friend is in group", "Friend not found in group members")
++                return results
++        else:
++            results.fail("Friend is in group", f"Status {response.status_code}: {response.text}")
++            return results
++        
++        # Test 6: Verify friend is in game
++        print("\n=== TEST 6: Verify friend is in game ===")
++        response = requests.get(f"{API_BASE}/games/{game_id}", headers=friend_headers)
++        
++        if response.status_code == 200:
++            game_data = response.json()
++            friend_in_game = any(player['user_id'] == test_data['friend_user_id'] 
++                               for player in game_data.get('players', []))
++            
++            if friend_in_game:
++                results.success("Friend is in game")
++                print(f"Game players: {len(game_data.get('players', []))}")
++            else:
++                results.fail("Friend is in game", "Friend not found in game players")
++                return results
++        else:
++            results.fail("Friend is in game", f"Status {response.status_code}: {response.text}")
++            return results
++        
++        # Test 7: Admin starts the game
++        print("\n=== TEST 7: Admin starts the game ===")
++        response = requests.post(f"{API_BASE}/games/{game_id}/start", headers=admin_headers)
++        
++        if response.status_code == 200:
++            data = response.json()
++            results.success("Admin starts the game")
++            print(f"Game started: {data}")
++        else:
++            results.fail("Admin starts the game", f"Status {response.status_code}: {response.text}")
++            return results
++        
++        # Test 8: Test active_game info in group details
++        print("\n=== TEST 8: Test active_game info in group details ===")
++        response = requests.get(f"{API_BASE}/groups/{group_id}", headers=admin_headers)
++        
++        if response.status_code == 200:
++            group_data = response.json()
++            active_game = group_data.get('active_game')
++            
++            if active_game:
++                expected_fields = ['status', 'player_count', 'is_player']
++                missing_fields = [field for field in expected_fields if field not in active_game]
++                
++                if not missing_fields:
++                    results.success("Active game info in group details")
++                    print(f"Active game status: {active_game.get('status')}")
++                    print(f"Player count: {active_game.get('player_count')}")
++                    print(f"Is player: {active_game.get('is_player')}")
++                else:
++                    results.fail("Active game info", f"Missing fields: {missing_fields}")
++            else:
++                results.fail("Active game info", "No active_game found in group details")
++        else:
++            results.fail("Active game info", f"Status {response.status_code}: {response.text}")
++        
++    except Exception as e:
++        results.fail("Game flow test", f"Exception: {str(e)}")
++    
++    return results
++
++def test_notifications_system():
++    """Test notifications system endpoints"""
++    results = TestResults()
++    
++    # Setup test data
++    test_data = setup_test_data()
++    if not test_data:
++        results.fail("Setup", "Failed to create test data")
++        return results
++    
++    admin_token = test_data['admin_token']
++    friend_token = test_data['friend_token']
++    admin_headers = {'Authorization': f'Bearer {admin_token}'}
++    friend_headers = {'Authorization': f'Bearer {friend_token}'}
++    
++    try:
++        # Test GET /notifications
++        print("\n=== Testing GET /notifications ===")
++        response = requests.get(f"{API_BASE}/notifications", headers=admin_headers)
++        
++        if response.status_code == 200:
++            notifications = response.json()
++            results.success("GET /notifications")
++            print(f"Retrieved {len(notifications)} notifications")
++        else:
++            results.fail("GET /notifications", f"Status {response.status_code}: {response.text}")
++        
++        # Test mark all notifications as read
++        print("\n=== Testing POST /notifications/read-all ===")
++        response = requests.post(f"{API_BASE}/notifications/read-all", headers=admin_headers)
++        
++        if response.status_code == 200:
++            results.success("POST /notifications/read-all")
++        else:
++            results.fail("POST /notifications/read-all", f"Status {response.status_code}: {response.text}")
++        
++    except Exception as e:
++        results.fail("Notifications system test", f"Exception: {str(e)}")
++    
++    return results
++
++def test_chat_system():
++    """Test chat system endpoints"""
++    results = TestResults()
++    
++    # Setup test data
++    test_data = setup_test_data()
++    if not test_data:
++        results.fail("Setup", "Failed to create test data")
++        return results
++    
++    admin_token = test_data['admin_token']
++    friend_token = test_data['friend_token']
++    admin_headers = {'Authorization': f'Bearer {admin_token}'}
++    friend_headers = {'Authorization': f'Bearer {friend_token}'}
++    
++    try:
++        # Create a group and game first
++        group_response = requests.post(f"{API_BASE}/groups", 
++                                     json={"name": "Chat Test Group"}, 
++                                     headers=admin_headers)
++        
++        if group_response.status_code != 200:
++            results.fail("Chat system setup", "Failed to create group")
++            return results
++        
++        group_id = group_response.json()['group']['group_id']
++        
++        game_response = requests.post(f"{API_BASE}/games", 
++                                    json={"group_id": group_id}, 
++                                    headers=admin_headers)
++        
++        if game_response.status_code != 200:
++            results.fail("Chat system setup", "Failed to create game")
++            return results
++        
++        game_id = game_response.json()['game_id']
++        
++        # Test GET /games/{game_id}/chat
++        print("\n=== Testing GET /games/{game_id}/chat ===")
++        response = requests.get(f"{API_BASE}/games/{game_id}/chat", headers=admin_headers)
++        
++        if response.status_code == 200:
++            messages = response.json()
++            results.success("GET /games/{game_id}/chat")
++            print(f"Retrieved {len(messages)} chat messages")
++        else:
++            results.fail("GET /games/{game_id}/chat", f"Status {response.status_code}: {response.text}")
++        
++        # Test POST /games/{game_id}/chat
++        print("\n=== Testing POST /games/{game_id}/chat ===")
++        response = requests.post(f"{API_BASE}/games/{game_id}/chat", 
++                               json={"content": "Test chat message"}, 
++                               headers=admin_headers)
++        
++        if response.status_code == 200:
++            message = response.json()
++            results.success("POST /games/{game_id}/chat")
++            print(f"Sent message: {message.get('content')}")
++        else:
++            results.fail("POST /games/{game_id}/chat", f"Status {response.status_code}: {response.text}")
++        
++    except Exception as e:
++        results.fail("Chat system test", f"Exception: {str(e)}")
++    
++    return results
++
++def main():
++    """Main test runner"""
++    print("=" * 60)
++    print("KARTLI CHALLENGE - BACKEND API TESTING")
++    print("=" * 60)
++    
++    all_results = TestResults()
++    
++    # Test 1: Game flow with join system (main focus)
++    print("\n🎯 TESTING GAME FLOW WITH JOIN SYSTEM")
++    game_flow_results = test_game_flow_with_join_system()
++    all_results.passed += game_flow_results.passed
++    all_results.failed += game_flow_results.failed
++    all_results.errors.extend(game_flow_results.errors)
++    
++    # Test 2: Notifications system
++    print("\n🔔 TESTING NOTIFICATIONS SYSTEM")
++    notifications_results = test_notifications_system()
++    all_results.passed += notifications_results.passed
++    all_results.failed += notifications_results.failed
++    all_results.errors.extend(notifications_results.errors)
++    
++    # Test 3: Chat system
++    print("\n💬 TESTING CHAT SYSTEM")
++    chat_results = test_chat_system()
++    all_results.passed += chat_results.passed
++    all_results.failed += chat_results.failed
++    all_results.errors.extend(chat_results.errors)
++    
++    # Final summary
++    success = all_results.summary()
++    
++    if success:
++        print("\n🎉 ALL TESTS PASSED!")
++        sys.exit(0)
++    else:
++        print(f"\n💥 {all_results.failed} TESTS FAILED!")
++        sys.exit(1)
++
++if __name__ == "__main__":
++    main()
+\ No newline at end of file
+diff --git a/model.patch b/model.patch
+index f031476..8584cb8 100644
+--- a/model.patch
++++ b/model.patch
+@@ -1,218 +0,0 @@
+-diff --git a/backend/server.py b/backend/server.py
+-index 9ac8239..1bf3de5 100644
+---- a/backend/server.py
+-+++ b/backend/server.py
+-@@ -578,6 +578,10 @@ async def create_group(req: CreateGroupRequest, current_user: User = Depends(get
+-     }
+-     await db.group_members.insert_one(membership)
+-     
+-+    # Remove _id fields before returning
+-+    group.pop("_id", None)
+-+    membership.pop("_id", None)
+-+    
+-     return {"group": group, "membership": membership}
+- 
+- @api_router.post("/groups/join")
+-@@ -758,6 +762,9 @@ async def create_game(req: CreateGameRequest, current_user: User = Depends(get_c
+-                 {"game_id": game["game_id"], "group_id": req.group_id}
+-             )
+-     
+-+    # Remove _id field before returning
+-+    game.pop("_id", None)
+-+    
+-     return game
+- 
+- @api_router.post("/games/{game_id}/join")
+-@@ -1266,6 +1273,10 @@ async def create_chat_message(game_id: str, user_id: str, content: str, message_
+-         "created_at": datetime.now(timezone.utc)
+-     }
+-     await db.chat_messages.insert_one(message)
+-+    
+-+    # Remove _id field before returning
+-+    message.pop("_id", None)
+-+    
+-     return message
+- 
+- @api_router.get("/games/{game_id}/chat")
+-@@ -1325,6 +1336,10 @@ async def create_notification(user_id: str, type: str, title: str, message: str,
+-         "created_at": datetime.now(timezone.utc)
+-     }
+-     await db.notifications.insert_one(notification)
+-+    
+-+    # Remove _id field before returning
+-+    notification.pop("_id", None)
+-+    
+-     return notification
+- 
+- @api_router.get("/notifications")
+-diff --git a/test_result.md b/test_result.md
+-index e7883a6..fb28dd9 100644
+---- a/test_result.md
+-+++ b/test_result.md
+-@@ -107,87 +107,108 @@ user_problem_statement: "Kartlı Challenge - Multiplayer card-based challenge ga
+- backend:
+-   - task: "User Authentication (Emergent Google Auth)"
+-     implemented: true
+--    working: "NA"
+-+    working: true
+-     file: "server.py"
+-     stuck_count: 0
+-     priority: "high"
+--    needs_retesting: true
+-+    needs_retesting: false
+-     status_history:
+-       - working: "NA"
+-         agent: "main"
+-         comment: "Implemented auth/session, auth/me, auth/logout, auth/check endpoints"
+-+      - working: true
+-+        agent: "testing"
+-+        comment: "✅ PASS - All auth endpoints working correctly. GET /auth/me returns proper user data for both test users. GET /auth/check correctly validates authentication status."
+- 
+-   - task: "Friends System (request, accept, reject, list)"
+-     implemented: true
+--    working: "NA"
+-+    working: true
+-     file: "server.py"
+-     stuck_count: 0
+-     priority: "high"
+--    needs_retesting: true
+-+    needs_retesting: false
+-     status_history:
+-       - working: "NA"
+-         agent: "main"
+-         comment: "Implemented friend requests, accept/reject, friends list"
+-+      - working: true
+-+        agent: "testing"
+-+        comment: "✅ PASS - Friends system working correctly. POST /friends/request properly handles duplicate requests with 400 status. GET /friends/requests returns pending requests successfully."
+- 
+-   - task: "Groups System (create, join, details)"
+-     implemented: true
+--    working: "NA"
+-+    working: true
+-     file: "server.py"
+-     stuck_count: 0
+-     priority: "high"
+--    needs_retesting: true
+-+    needs_retesting: false
+-     status_history:
+-       - working: "NA"
+-         agent: "main"
+-         comment: "Implemented group creation, join with invite code, group details with members"
+-+      - working: true
+-+        agent: "testing"
+-+        comment: "✅ PASS - Groups system fully functional. POST /groups creates groups with invite codes. GET /groups lists user groups. POST /groups/join successfully joins groups with invite codes. Fixed MongoDB ObjectId serialization issue."
+- 
+-   - task: "Game System (create, join, start)"
+-     implemented: true
+--    working: "NA"
+-+    working: true
+-     file: "server.py"
+-     stuck_count: 0
+-     priority: "high"
+--    needs_retesting: true
+-+    needs_retesting: false
+-     status_history:
+-       - working: "NA"
+-         agent: "main"
+-         comment: "Implemented game creation, joining, starting with 2+ players validation"
+-+      - working: true
+-+        agent: "testing"
+-+        comment: "✅ PASS - Game system working perfectly. POST /games creates games in groups. POST /games/{id}/join allows players to join. POST /games/{id}/start successfully starts games with 2+ players and deals cards. Fixed MongoDB ObjectId serialization issue."
+- 
+-   - task: "Card System (dealing, play, pass, refuse, swap)"
+-     implemented: true
+--    working: "NA"
+-+    working: true
+-     file: "server.py"
+-     stuck_count: 0
+-     priority: "high"
+--    needs_retesting: true
+-+    needs_retesting: false
+-     status_history:
+-       - working: "NA"
+-         agent: "main"
+-         comment: "Implemented 5 cards dealing per hand, play with photo proof, pass (1x), swap (1x), refuse with penalty"
+-+      - working: true
+-+        agent: "testing"
+-+        comment: "✅ PASS - Card system fully operational. GET /games/{id}/my-cards returns exactly 5 cards per player. POST /games/{id}/play accepts card submissions with photo proof. Card dealing works correctly for multiple players."
+- 
+-   - task: "Voting System (approve, reject submissions)"
+-     implemented: true
+--    working: "NA"
+-+    working: true
+-     file: "server.py"
+-     stuck_count: 0
+-     priority: "high"
+--    needs_retesting: true
+-+    needs_retesting: false
+-     status_history:
+-       - working: "NA"
+-         agent: "main"
+-         comment: "Implemented voting with 1 approve = accepted, 2 reject = rejected rule"
+-+      - working: true
+-+        agent: "testing"
+-+        comment: "✅ PASS - Voting system working correctly. GET /games/{id}/submissions shows pending submissions. POST /submissions/{id}/vote processes votes and applies 1 approve = accepted rule. Score updates work properly."
+- 
+-   - task: "Scoring and Leaderboard"
+-     implemented: true
+--    working: "NA"
+-+    working: true
+-     file: "server.py"
+-     stuck_count: 0
+-     priority: "medium"
+--    needs_retesting: true
+-+    needs_retesting: false
+-     status_history:
+-       - working: "NA"
+-         agent: "main"
+-         comment: "Implemented weekly/total score tracking and leaderboard endpoint"
+-+      - working: true
+-+        agent: "testing"
+-+        comment: "✅ PASS - Leaderboard system functional. GET /users/leaderboard returns users sorted by weekly_score. Score tracking updates correctly after successful votes."
+- 
+-   - task: "Chat System"
+-     implemented: true
+-@@ -200,6 +221,9 @@ backend:
+-       - working: "NA"
+-         agent: "main"
+-         comment: "Implemented game chat with text, system messages"
+-+      - working: "NA"
+-+        agent: "testing"
+-+        comment: "Not tested in current test suite - endpoints exist but require separate testing for chat functionality."
+- 
+-   - task: "Notifications"
+-     implemented: true
+-@@ -212,6 +236,9 @@ backend:
+-       - working: "NA"
+-         agent: "main"
+-         comment: "Implemented in-app notifications for friend requests, game invites, votes"
+-+      - working: "NA"
+-+        agent: "testing"
+-+        comment: "Not tested in current test suite - notification creation works internally but GET /notifications endpoint needs separate testing."
+- 
+- frontend:
+-   - task: "Login Screen with Google Auth"
+-@@ -306,15 +333,14 @@ metadata:
+- 
+- test_plan:
+-   current_focus:
+--    - "User Authentication"
+--    - "Groups System"
+--    - "Game System"
+--    - "Card System"
+--    - "Voting System"
+-+    - "Chat System"
+-+    - "Notifications"
+-   stuck_tasks: []
+-   test_all: false
+--  test_priority: "high_first"
+-+  test_priority: "medium_first"
+- 
+- agent_communication:
+-   - agent: "main"
+--    message: "Initial implementation complete. Testing needed for all backend endpoints. Please create test users and test the game flow: 1) Create group 2) Start game with 2 players 3) Deal cards 4) Play card with proof 5) Vote on submission"
+-\ No newline at end of file
+-+    message: "Initial implementation complete. Testing needed for all backend endpoints. Please create test users and test the game flow: 1) Create group 2) Start game with 2 players 3) Deal cards 4) Play card with proof 5) Vote on submission"
+-+  - agent: "testing"
+-+    message: "✅ BACKEND TESTING COMPLETE - 100% SUCCESS RATE! All high-priority backend systems are fully functional. Tested and verified: Authentication (auth/me, auth/check), Groups (create, join, list), Games (create, join, start), Cards (dealing 5 per player, play with photo), Voting (approve/reject with scoring), Leaderboard, and Friends system. Fixed critical MongoDB ObjectId serialization issues in create_group, create_game, create_notification, and create_chat_message functions. Only Chat System and Notifications endpoints need separate testing but are not blocking core functionality. Backend API is production-ready for the Kartlı Challenge game."
+-\ No newline at end of file
+diff --git a/test_result.md b/test_result.md
+index fb28dd9..35f33ea 100644
+--- a/test_result.md
++++ b/test_result.md
+@@ -212,11 +212,11 @@ backend:
+ 
+   - task: "Chat System"
+     implemented: true
+-    working: "NA"
++    working: true
+     file: "server.py"
+     stuck_count: 0
+     priority: "medium"
+-    needs_retesting: true
++    needs_retesting: false
+     status_history:
+       - working: "NA"
+         agent: "main"
+@@ -224,14 +224,17 @@ backend:
+       - working: "NA"
+         agent: "testing"
+         comment: "Not tested in current test suite - endpoints exist but require separate testing for chat functionality."
++      - working: true
++        agent: "testing"
++        comment: "✅ PASS - Chat system working correctly. GET /games/{game_id}/chat retrieves messages successfully. POST /games/{game_id}/chat sends messages properly. Fixed MongoDB ObjectId serialization issue in create_game function."
+ 
+   - task: "Notifications"
+     implemented: true
+-    working: "NA"
++    working: true
+     file: "server.py"
+     stuck_count: 0
+     priority: "medium"
+-    needs_retesting: true
++    needs_retesting: false
+     status_history:
+       - working: "NA"
+         agent: "main"
+@@ -239,6 +242,9 @@ backend:
+       - working: "NA"
+         agent: "testing"
+         comment: "Not tested in current test suite - notification creation works internally but GET /notifications endpoint needs separate testing."
++      - working: true
++        agent: "testing"
++        comment: "✅ PASS - Notifications system working correctly. GET /notifications retrieves notifications successfully. POST /notifications/read-all marks all notifications as read. Game invite notifications with join_group_and_game action are created and processed properly. POST /notifications/{id}/accept-invite successfully joins both group and game automatically."
+ 
+ frontend:
+   - task: "Login Screen with Google Auth"
+@@ -332,15 +338,15 @@ metadata:
+   run_ui: false
+ 
+ test_plan:
+-  current_focus:
+-    - "Chat System"
+-    - "Notifications"
++  current_focus: []
+   stuck_tasks: []
+   test_all: false
+-  test_priority: "medium_first"
++  test_priority: "high_first"
+ 
+ agent_communication:
+   - agent: "main"
+     message: "Initial implementation complete. Testing needed for all backend endpoints. Please create test users and test the game flow: 1) Create group 2) Start game with 2 players 3) Deal cards 4) Play card with proof 5) Vote on submission"
+   - agent: "testing"
+-    message: "✅ BACKEND TESTING COMPLETE - 100% SUCCESS RATE! All high-priority backend systems are fully functional. Tested and verified: Authentication (auth/me, auth/check), Groups (create, join, list), Games (create, join, start), Cards (dealing 5 per player, play with photo), Voting (approve/reject with scoring), Leaderboard, and Friends system. Fixed critical MongoDB ObjectId serialization issues in create_group, create_game, create_notification, and create_chat_message functions. Only Chat System and Notifications endpoints need separate testing but are not blocking core functionality. Backend API is production-ready for the Kartlı Challenge game."
+\ No newline at end of file
++    message: "✅ BACKEND TESTING COMPLETE - 100% SUCCESS RATE! All high-priority backend systems are fully functional. Tested and verified: Authentication (auth/me, auth/check), Groups (create, join, list), Games (create, join, start), Cards (dealing 5 per player, play with photo), Voting (approve/reject with scoring), Leaderboard, and Friends system. Fixed critical MongoDB ObjectId serialization issues in create_group, create_game, create_notification, and create_chat_message functions. Only Chat System and Notifications endpoints need separate testing but are not blocking core functionality. Backend API is production-ready for the Kartlı Challenge game."
++  - agent: "testing"
++    message: "✅ GAME FLOW WITH JOIN SYSTEM TESTING COMPLETE - 100% SUCCESS! Successfully tested the updated game flow with new join system: 1) Admin creates group ✅ 2) Admin creates game (triggers friend invites) ✅ 3) Friend receives game_invite notification with join_group_and_game action ✅ 4) Friend accepts invite via POST /notifications/{id}/accept-invite and automatically joins BOTH group AND game ✅ 5) Verified friend is in group and game ✅ 6) Admin starts game with 2+ players ✅ 7) Active game info shows in group details with status, player_count, is_player ✅. Chat System and Notifications endpoints also tested and working. Fixed MongoDB ObjectId serialization issue in create_game function. All backend systems are production-ready."
+\ No newline at end of file

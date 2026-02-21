@@ -1,0 +1,132 @@
+{
+  "summary": {
+    "total": 19,
+    "passed": 19,
+    "failed": 0,
+    "success_rate": 100.0,
+    "failed_test_names": []
+  },
+  "details": [
+    {
+      "test": "GET / (root)",
+      "success": true,
+      "details": "API message: Kartl\u0131 Challenge API",
+      "timestamp": "2026-02-15T15:46:33.417348"
+    },
+    {
+      "test": "GET /health",
+      "success": true,
+      "details": "API is healthy",
+      "timestamp": "2026-02-15T15:46:33.541576"
+    },
+    {
+      "test": "GET /auth/me (token1)",
+      "success": true,
+      "details": "User: Test User 1",
+      "timestamp": "2026-02-15T15:46:33.657593"
+    },
+    {
+      "test": "GET /auth/me (token2)",
+      "success": true,
+      "details": "User: Test User 2",
+      "timestamp": "2026-02-15T15:46:33.785888"
+    },
+    {
+      "test": "GET /auth/check (token1)",
+      "success": true,
+      "details": "Authenticated successfully",
+      "timestamp": "2026-02-15T15:46:33.916857"
+    },
+    {
+      "test": "POST /groups (create)",
+      "success": true,
+      "details": "Group ID: grp_5d1b10b34c86, Invite: 44AC17AE",
+      "timestamp": "2026-02-15T15:46:34.040428"
+    },
+    {
+      "test": "GET /groups (list)",
+      "success": true,
+      "details": "Found 7 groups",
+      "timestamp": "2026-02-15T15:46:34.177769"
+    },
+    {
+      "test": "POST /groups/join (token2)",
+      "success": true,
+      "details": "Successfully joined group",
+      "timestamp": "2026-02-15T15:46:34.331697"
+    },
+    {
+      "test": "POST /games (create)",
+      "success": true,
+      "details": "Game ID: game_d8ef06bec06e",
+      "timestamp": "2026-02-15T15:46:34.489464"
+    },
+    {
+      "test": "POST /games/{game_id}/join (token2)",
+      "success": true,
+      "details": "Successfully joined game",
+      "timestamp": "2026-02-15T15:46:34.599959"
+    },
+    {
+      "test": "POST /games/{game_id}/start",
+      "success": true,
+      "details": "Game started successfully",
+      "timestamp": "2026-02-15T15:46:34.718681"
+    },
+    {
+      "test": "GET /games/{game_id}/my-cards (token1)",
+      "success": true,
+      "details": "Got 5 cards",
+      "timestamp": "2026-02-15T15:46:34.849743"
+    },
+    {
+      "test": "GET /games/{game_id}/my-cards (token2)",
+      "success": true,
+      "details": "Got 5 cards",
+      "timestamp": "2026-02-15T15:46:34.969088"
+    },
+    {
+      "test": "POST /games/{game_id}/play (token1)",
+      "success": true,
+      "details": "Submission ID: sub_cef9ae0a2053",
+      "timestamp": "2026-02-15T15:46:35.092743"
+    },
+    {
+      "test": "GET /games/{game_id}/submissions (token2)",
+      "success": true,
+      "details": "Found 1 submissions",
+      "timestamp": "2026-02-15T15:46:35.201189"
+    },
+    {
+      "test": "POST /submissions/{submission_id}/vote (token2)",
+      "success": true,
+      "details": "Vote result: approved",
+      "timestamp": "2026-02-15T15:46:35.305308"
+    },
+    {
+      "test": "GET /users/leaderboard",
+      "success": true,
+      "details": "Got 2 users in leaderboard",
+      "timestamp": "2026-02-15T15:46:35.441859"
+    },
+    {
+      "test": "POST /friends/request (token1 to token2)",
+      "success": true,
+      "details": "Request already exists (expected): Request already sent",
+      "timestamp": "2026-02-15T15:46:35.548726"
+    },
+    {
+      "test": "GET /friends/requests (token2)",
+      "success": true,
+      "details": "Found 1 friend requests",
+      "timestamp": "2026-02-15T15:46:35.662125"
+    }
+  ],
+  "test_config": {
+    "base_url": "https://dare-challenge-7.preview.emergentagent.com/api",
+    "token1": "test_token_1_1771170054224",
+    "token2": "test_token_2_1771170054224",
+    "player_id1": "PLRXW3K9N",
+    "player_id2": "PLR83ERJ4"
+  }
+}
