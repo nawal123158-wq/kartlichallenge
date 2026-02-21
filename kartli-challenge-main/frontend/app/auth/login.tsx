@@ -12,6 +12,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import * as ExpoLinking from 'expo-linking';
 
+import { API_URL } from '../../src/config';
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const COLORS = {
@@ -26,8 +28,6 @@ const COLORS = {
   text: '#FFFFFF',
   textSecondary: '#A5A5C0',
 };
-
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://kartlichallenge.onrender.com';
 
 export default function LoginScreen() {
   const handleGoogleLogin = async () => {

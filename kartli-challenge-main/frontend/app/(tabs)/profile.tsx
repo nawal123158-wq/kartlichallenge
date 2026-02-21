@@ -16,6 +16,8 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../src/store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { API_URL } from '../../src/config';
+
 const COLORS = {
   primary: '#8B5CF6',
   primaryLight: '#A78BFA',
@@ -32,8 +34,6 @@ const COLORS = {
   textSecondary: '#A5A5C0',
   textMuted: '#6B6B8A',
 };
-
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://kartlichallenge.onrender.com';
 
 export default function ProfileScreen() {
   const router = useRouter();

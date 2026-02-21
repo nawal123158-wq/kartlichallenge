@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../../src/store';
 import { User } from '../../src/types';
+import { API_URL } from '../../src/config';
 
 const COLORS = {
   primary: '#6366F1',
@@ -28,8 +29,6 @@ const COLORS = {
   textSecondary: '#94A3B8',
   textMuted: '#64748B',
 };
-
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://kartlichallenge.onrender.com';
 
 export default function LeaderboardScreen() {
   const { user } = useAuthStore();

@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../../src/store';
 import { GameCard, Button } from '../../src/components/UI';
 import { Game, Card, HandCard, Submission, ChatMessage, GamePlayer } from '../../src/types';
+import { API_URL } from '../../src/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -40,8 +41,6 @@ const COLORS = {
   textMuted: '#64748B',
   border: '#334155',
 };
-
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://kartlichallenge.onrender.com';
 
 export default function GameScreen() {
   const { id: gameId } = useLocalSearchParams<{ id: string }>();

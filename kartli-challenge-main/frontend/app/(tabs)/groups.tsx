@@ -21,7 +21,7 @@ import { Group } from '../../src/types';
 
 import { COLORS } from '../../src/theme';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://kartlichallenge.onrender.com';
+import { API_URL } from '../../src/config';
 
 export default function GroupsScreen() {
   const router = useRouter();
