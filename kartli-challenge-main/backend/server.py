@@ -18,9 +18,14 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+mongo_url = os.getenv('MONGO_URL')
+db_name = os.getenv('DB_NAME')
+
+client = None
+db = None
+if mongo_url and db_name:
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[db_name]
 
 # Create the main app
 app = FastAPI()
@@ -2093,9 +2098,12 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
+    if db is None:
+        raise RuntimeError("Missing required env vars: MONGO_URL and/or DB_NAME")
     await initialize_decks()
     logger.info("Application started, decks initialized")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    if client is not None:
+        client.close()
