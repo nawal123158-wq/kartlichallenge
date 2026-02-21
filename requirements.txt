@@ -1,0 +1,1 @@
+-r kartli-challenge-main/backend/requirements.txt
