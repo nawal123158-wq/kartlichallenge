@@ -33,7 +33,7 @@ const COLORS = {
   textMuted: '#6B6B8A',
 };
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://kartlichallenge.onrender.com';
 
 export default function ProfileScreen() {
   const router = useRouter();

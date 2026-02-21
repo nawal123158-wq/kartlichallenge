@@ -41,7 +41,7 @@ const COLORS = {
   border: '#334155',
 };
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://kartlichallenge.onrender.com';
 
 export default function GameScreen() {
   const { id: gameId } = useLocalSearchParams<{ id: string }>();

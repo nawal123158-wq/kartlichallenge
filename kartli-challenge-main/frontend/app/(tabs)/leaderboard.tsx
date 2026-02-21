@@ -29,7 +29,7 @@ const COLORS = {
   textMuted: '#64748B',
 };
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://kartlichallenge.onrender.com';
 
 export default function LeaderboardScreen() {
   const { user } = useAuthStore();
