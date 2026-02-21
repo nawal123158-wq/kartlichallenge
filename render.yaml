@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: kartlichallenge-backend
+    env: python
+    rootDir: kartli-challenge-main/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    envVars:
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: VOTE_TIMEOUT_SECONDS
+        value: "60"
+      - key: MIN_VOTES_REQUIRED
+        value: "2"

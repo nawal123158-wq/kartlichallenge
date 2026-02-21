@@ -2063,6 +2063,14 @@ async def root(request: Request):
 async def health(request: Request):
     return {"status": t("healthy", request)}
 
+@app.get("/")
+async def app_root():
+    return {"service": "Kartlı Challenge API", "api": "/api", "docs": "/docs"}
+
+@app.get("/health")
+async def app_health():
+    return {"status": "ok"}
+
 # Include router
 app.include_router(api_router)
 
