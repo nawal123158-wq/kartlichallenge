@@ -2,9 +2,9 @@ services:
   - type: web
     name: kartlichallenge-backend
     env: python
-    rootDir: kartli-challenge-main/backend
+    rootDir: .
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT --log-level debug
     autoDeploy: true
     envVars:
       - key: MONGO_URL
