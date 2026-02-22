@@ -24,7 +24,7 @@ db_name = os.getenv('DB_NAME')
 client = None
 db = None
 if mongo_url and db_name:
-    client = AsyncIOMotorClient(mongo_url)
+    client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
     db = client[db_name]
 
 # Create the main app
@@ -2101,6 +2101,7 @@ async def startup_event():
     try:
         if db is None:
             raise RuntimeError("Missing required env vars: MONGO_URL and/or DB_NAME")
+        await db.command("ping")
         await initialize_decks()
         logger.info("Application started, decks initialized")
     except Exception:
