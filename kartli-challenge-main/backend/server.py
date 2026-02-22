@@ -2098,10 +2098,14 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    if db is None:
-        raise RuntimeError("Missing required env vars: MONGO_URL and/or DB_NAME")
-    await initialize_decks()
-    logger.info("Application started, decks initialized")
+    try:
+        if db is None:
+            raise RuntimeError("Missing required env vars: MONGO_URL and/or DB_NAME")
+        await initialize_decks()
+        logger.info("Application started, decks initialized")
+    except Exception:
+        logger.exception("Startup failed")
+        raise
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
