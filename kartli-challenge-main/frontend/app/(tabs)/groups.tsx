@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   Alert,
   Share,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -126,7 +125,7 @@ export default function GroupsScreen() {
         const error = await response.json();
         Alert.alert('Hata', error.detail || 'Oyun başlatılamadı');
       }
-    } catch (error) {
+    } catch {
       Alert.alert('Hata', 'Bir hata oluştu');
     }
     setLoading(false);
@@ -399,7 +398,7 @@ export default function GroupsScreen() {
                           const error = await response.json();
                           Alert.alert('Hata', error.detail || 'Oyuna katılınamadı');
                         }
-                      } catch (error) {
+                      } catch {
                         Alert.alert('Hata', 'Bir hata oluştu');
                       }
                       setLoading(false);

@@ -59,13 +59,6 @@ export default function LeaderboardScreen() {
     fetchLeaderboard();
   }, []);
 
-  const getRankBadge = (rank: number) => {
-    if (rank === 1) return { color: PODIUM.gold, icon: 'trophy' };
-    if (rank === 2) return { color: PODIUM.silver, icon: 'medal' };
-    if (rank === 3) return { color: PODIUM.bronze, icon: 'medal' };
-    return null;
-  };
-
   const myRank = leaderboard.findIndex(u => u.user_id === user?.user_id) + 1;
 
   return (

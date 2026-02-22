@@ -56,7 +56,6 @@ export default function ProfileScreen() {
     
     setLoading(true);
     try {
-      const token = await AsyncStorage.getItem('session_token');
       // Note: Backend'de update endpoint yoksa eklenebilir
       // Şimdilik sadece local state güncelleniyor
       if (user) {
@@ -64,7 +63,7 @@ export default function ProfileScreen() {
       }
       setShowEditModal(false);
       Alert.alert('Başarılı', 'Profil güncellendi');
-    } catch (error) {
+    } catch {
       Alert.alert('Hata', 'Profil güncellenemedi');
     }
     setLoading(false);
@@ -99,7 +98,7 @@ export default function ProfileScreen() {
                   const error = await response.json();
                   Alert.alert('Hata', error.detail || 'Katılım başarısız');
                 }
-              } catch (error) {
+              } catch {
                 Alert.alert('Hata', 'Bir hata oluştu');
               }
               setLoading(false);

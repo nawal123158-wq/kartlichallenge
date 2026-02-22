@@ -21,7 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../src/store';
 import { EmptyState, GameCard, Button, Input, Skeleton } from '../../src/components/UI';
-import { Game, Card, HandCard, Submission, ChatMessage, GamePlayer } from '../../src/types';
+import { Game, HandCard, Submission, ChatMessage } from '../../src/types';
 import { API_URL } from '../../src/config';
 
 import { COLORS } from '../../src/theme';
@@ -60,7 +60,7 @@ export default function GameScreen() {
     return await AsyncStorage.getItem('session_token');
   };
 
-  const fetchGame = async () => {
+  const fetchGame = useCallback(async () => {
     try {
       const token = await getToken();
       if (!token) return;
@@ -79,9 +79,9 @@ export default function GameScreen() {
     } catch (error) {
       console.error('Fetch game error:', error);
     }
-  };
+  }, [gameId, router]);
 
-  const fetchMyCards = async () => {
+  const fetchMyCards = useCallback(async () => {
     try {
       const token = await getToken();
       if (!token || !game || game.status !== 'started') return;
@@ -99,9 +99,9 @@ export default function GameScreen() {
     } catch (error) {
       console.error('Fetch cards error:', error);
     }
-  };
+  }, [game, gameId]);
 
-  const fetchSubmissions = async () => {
+  const fetchSubmissions = useCallback(async () => {
     try {
       const token = await getToken();
       if (!token || !game || game.status !== 'started') return;
@@ -117,9 +117,9 @@ export default function GameScreen() {
     } catch (error) {
       console.error('Fetch submissions error:', error);
     }
-  };
+  }, [game, gameId]);
 
-  const fetchChat = async () => {
+  const fetchChat = useCallback(async () => {
     try {
       const token = await getToken();
       if (!token) return;
@@ -135,17 +135,17 @@ export default function GameScreen() {
     } catch (error) {
       console.error('Fetch chat error:', error);
     }
-  };
+  }, [gameId]);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     await fetchGame();
     setLoading(false);
-  };
+  }, [fetchGame]);
 
   useEffect(() => {
     loadAll();
-  }, [gameId]);
+  }, [loadAll]);
 
   useEffect(() => {
     if (game) {
@@ -153,7 +153,7 @@ export default function GameScreen() {
       fetchSubmissions();
       fetchChat();
     }
-  }, [game]);
+  }, [fetchChat, fetchMyCards, fetchSubmissions, game]);
 
   // Refresh periodically when game is in waiting or ready state
   useEffect(() => {
@@ -168,7 +168,7 @@ export default function GameScreen() {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [game]);
+  }, [fetchChat, fetchGame, fetchSubmissions, game?.status]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -208,7 +208,7 @@ export default function GameScreen() {
         const error = await response.json();
         Alert.alert('Hata', error.detail || 'Katılım başarısız');
       }
-    } catch (error) {
+    } catch {
       Alert.alert('Hata', 'Bir hata oluştu');
     }
     setActionLoading(false);
@@ -238,7 +238,7 @@ export default function GameScreen() {
         const error = await response.json();
         Alert.alert('Hata', error.detail || 'Oyun başlatılamadı');
       }
-    } catch (error) {
+    } catch {
       Alert.alert('Hata', 'Bir hata oluştu');
     }
     setActionLoading(false);
@@ -345,7 +345,7 @@ export default function GameScreen() {
         const error = await response.json();
         Alert.alert('Hata', error.detail || 'İşlem başarısız');
       }
-    } catch (error) {
+    } catch {
       Alert.alert('Hata', 'Bir hata oluştu');
     }
     setActionLoading(false);
@@ -386,7 +386,7 @@ export default function GameScreen() {
                 const error = await response.json();
                 Alert.alert('Hata', error.detail || 'Değiştirme başarısız');
               }
-            } catch (error) {
+            } catch {
               Alert.alert('Hata', 'Bir hata oluştu');
             }
             setActionLoading(false);
@@ -432,7 +432,7 @@ export default function GameScreen() {
         const error = await response.json();
         Alert.alert('Hata', error.detail || 'Oy verilemedi');
       }
-    } catch (error) {
+    } catch {
       Alert.alert('Hata', 'Bir hata oluştu');
     }
     setActionLoading(false);

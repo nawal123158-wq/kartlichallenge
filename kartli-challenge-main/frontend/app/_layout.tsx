@@ -2,10 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet, Platform, Linking } from 'react-native';
-import { useAuthStore } from '../src/store';
-import { useGameStore } from '../src/store';
+import { useAuthStore, useGameStore } from '../src/store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as WebBrowser from 'expo-web-browser';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
@@ -84,12 +82,12 @@ export default function RootLayout() {
     };
 
     processSessionFromURL();
-  }, []);
+  }, [exchangeSession, processingAuth]);
 
   // Check auth on mount
   useEffect(() => {
     checkAuth();
-  }, []);
+  }, [checkAuth]);
 
   // Handle deep link for mobile
   useEffect(() => {
@@ -138,7 +136,7 @@ export default function RootLayout() {
     return () => {
       subscription.remove();
     };
-  }, [processingAuth, isAuthenticated, tryConsumePendingInvite]);
+  }, [exchangeSession, processingAuth, isAuthenticated, tryConsumePendingInvite]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -151,14 +149,13 @@ export default function RootLayout() {
     if (isLoading || processingAuth) return;
 
     const inAuthGroup = segments[0] === 'auth';
-    const inTabs = segments[0] === '(tabs)';
 
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/auth/login');
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, segments, isLoading, processingAuth]);
+  }, [isAuthenticated, segments, isLoading, processingAuth, router]);
 
   if (isLoading || processingAuth || !fontsLoaded) {
     return (

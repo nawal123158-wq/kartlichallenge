@@ -22,7 +22,7 @@ export default function TabsLayout() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchFriendRequests, fetchFriends, fetchGroups, fetchNotifications]);
 
   return (
     <Tabs

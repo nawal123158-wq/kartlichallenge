@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Platform,
   SafeAreaView,
-  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
@@ -16,8 +15,6 @@ import { API_URL } from '../../src/config';
 import { Button } from '../../src/components/UI';
 
 import { COLORS, theme } from '../../src/theme';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const handleGoogleLogin = async () => {
