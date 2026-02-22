@@ -783,7 +783,7 @@ export default function GameScreen() {
                 )}
 
                 {selectedSubmission.note && (
-                  <Text style={styles.submissionNote}>"{selectedSubmission.note}"</Text>
+                  <Text style={styles.submissionNote}>{`"${selectedSubmission.note}"`}</Text>
                 )}
 
                 <View style={styles.voteButtons}>

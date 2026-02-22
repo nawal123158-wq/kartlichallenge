@@ -107,7 +107,7 @@ export default function HomeScreen() {
                   <Text style={styles.playerIdIcon}>🎯</Text>
                 </View>
                 <View style={styles.playerIdInfo}>
-                  <Text style={styles.playerIdLabel}>Oyuncu ID'niz</Text>
+                  <Text style={styles.playerIdLabel}>{"Oyuncu ID'niz"}</Text>
                   <Text style={styles.playerId}>{user?.player_id || '...'}</Text>
                 </View>
               </View>
