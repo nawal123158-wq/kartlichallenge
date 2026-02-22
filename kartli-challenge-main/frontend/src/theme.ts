@@ -1,4 +1,12 @@
+import { Platform } from 'react-native';
+
 export const theme = {
+  fonts: {
+    display: Platform.select({ ios: 'System', android: 'sans-serif-medium', default: 'System' }) as string,
+    body: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }) as string,
+    mono: 'SpaceMono',
+  },
+
   colors: {
     primary: '#6366F1',
     primaryLight: '#818CF8',
@@ -55,10 +63,11 @@ export const theme = {
   },
 
   typography: {
-    h1: { fontSize: 28, fontWeight: '800' as const },
-    h2: { fontSize: 22, fontWeight: '800' as const },
-    h3: { fontSize: 18, fontWeight: '700' as const },
+    h1: { fontSize: 28, fontWeight: '800' as const, letterSpacing: -0.3 },
+    h2: { fontSize: 22, fontWeight: '800' as const, letterSpacing: -0.2 },
+    h3: { fontSize: 18, fontWeight: '700' as const, letterSpacing: -0.1 },
     body: { fontSize: 16, fontWeight: '500' as const },
+    bodyStrong: { fontSize: 16, fontWeight: '700' as const },
     caption: { fontSize: 12, fontWeight: '600' as const },
   },
 };

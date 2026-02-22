@@ -18,29 +18,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../src/store';
-import { GameCard, Button } from '../../src/components/UI';
+import { EmptyState, GameCard, Button, Input, Skeleton } from '../../src/components/UI';
 import { Game, Card, HandCard, Submission, ChatMessage, GamePlayer } from '../../src/types';
 import { API_URL } from '../../src/config';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { COLORS } from '../../src/theme';
 
-const COLORS = {
-  primary: '#6366F1',
-  primaryLight: '#818CF8',
-  secondary: '#EC4899',
-  success: '#10B981',
-  warning: '#F59E0B',
-  error: '#EF4444',
-  background: '#0F172A',
-  backgroundLight: '#1E293B',
-  card: '#1E293B',
-  cardLight: '#334155',
-  text: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  textMuted: '#64748B',
-  border: '#334155',
-};
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function GameScreen() {
   const { id: gameId } = useLocalSearchParams<{ id: string }>();
@@ -259,6 +245,7 @@ export default function GameScreen() {
   };
 
   const handleSelectCard = (card: HandCard) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
     // prevent selecting if it's not this player's turn
     const currentPlayerId = game?.turn_order?.[game?.current_turn_index ?? 0];
     if (currentPlayerId && currentPlayerId !== user?.user_id) {
@@ -487,8 +474,15 @@ export default function GameScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Yükleniyor...</Text>
+        <View style={[styles.loadingContainer, { paddingHorizontal: 16, alignItems: 'stretch' }]}>
+          <Skeleton height={44} radius={16} style={{ marginTop: 8 }} />
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+            <Skeleton height={84} width={84} radius={22} />
+            <Skeleton height={84} width={84} radius={22} />
+            <Skeleton height={84} width={84} radius={22} />
+          </View>
+          <Skeleton height={18} radius={10} style={{ marginTop: 18, width: '50%' }} />
+          <Skeleton height={210} radius={18} style={{ marginTop: 12 }} />
         </View>
       </SafeAreaView>
     );
@@ -616,7 +610,13 @@ export default function GameScreen() {
                 </View>
               ))}
               {myCards.length === 0 && (
-                <Text style={styles.noCardsText}>Bu turda kartınız kalmadı</Text>
+                <View style={{ width: SCREEN_WIDTH - 32, paddingRight: 16 }}>
+                  <EmptyState
+                    icon="albums-outline"
+                    title="Bu turda kartın kalmadı"
+                    message="Bir sonraki el için bekle."
+                  />
+                </View>
               )}
             </ScrollView>
           </View>
@@ -696,15 +696,16 @@ export default function GameScreen() {
                   <Image source={{ uri: proofPhoto }} style={styles.proofPreview} />
                 )}
 
-                <Text style={styles.inputLabel}>Not (Opsiyonel)</Text>
-                <TextInput
-                  style={styles.noteInput}
-                  value={proofNote}
-                  onChangeText={setProofNote}
-                  placeholder="Açıklama ekle..."
-                  placeholderTextColor={COLORS.textMuted}
-                  multiline
-                />
+                <View style={{ marginTop: 12 }}>
+                  <Input
+                    label="Not (Opsiyonel)"
+                    value={proofNote}
+                    onChangeText={setProofNote}
+                    placeholder="Açıklama ekle..."
+                    icon="document-text-outline"
+                    multiline
+                  />
+                </View>
 
                 {/* Actions */}
                 <View style={styles.playActions}>

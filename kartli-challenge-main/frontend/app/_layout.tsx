@@ -49,6 +49,7 @@ export default function RootLayout() {
   // Load fonts
   const [fontsLoaded] = useFonts({
     ...Ionicons.font,
+    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
   const onLayoutRootView = useCallback(async () => {

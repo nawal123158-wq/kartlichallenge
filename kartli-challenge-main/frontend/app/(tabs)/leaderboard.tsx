@@ -13,22 +13,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../../src/store';
 import { User } from '../../src/types';
 import { API_URL } from '../../src/config';
+import { EmptyState, Skeleton } from '../../src/components/UI';
 
-const COLORS = {
-  primary: '#6366F1',
-  primaryLight: '#818CF8',
-  secondary: '#EC4899',
+import { COLORS } from '../../src/theme';
+
+const PODIUM = {
   gold: '#F59E0B',
   silver: '#94A3B8',
   bronze: '#D97706',
-  background: '#0F172A',
-  backgroundLight: '#1E293B',
-  card: '#1E293B',
-  cardLight: '#334155',
-  text: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  textMuted: '#64748B',
-};
+} as const;
 
 export default function LeaderboardScreen() {
   const { user } = useAuthStore();
@@ -67,9 +60,9 @@ export default function LeaderboardScreen() {
   }, []);
 
   const getRankBadge = (rank: number) => {
-    if (rank === 1) return { color: COLORS.gold, icon: 'trophy' };
-    if (rank === 2) return { color: COLORS.silver, icon: 'medal' };
-    if (rank === 3) return { color: COLORS.bronze, icon: 'medal' };
+    if (rank === 1) return { color: PODIUM.gold, icon: 'trophy' };
+    if (rank === 2) return { color: PODIUM.silver, icon: 'medal' };
+    if (rank === 3) return { color: PODIUM.bronze, icon: 'medal' };
     return null;
   };
 
@@ -79,7 +72,7 @@ export default function LeaderboardScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={[COLORS.gold, '#FBBF24']}
+        colors={[PODIUM.gold, '#FBBF24']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.header}
@@ -100,41 +93,41 @@ export default function LeaderboardScreen() {
         <View style={styles.podiumContainer}>
           {/* 2nd Place */}
           <View style={[styles.podiumItem, styles.podiumSecond]}>
-            <View style={[styles.podiumAvatar, { backgroundColor: COLORS.silver }]}>
+            <View style={[styles.podiumAvatar, { backgroundColor: PODIUM.silver }]}>
               <Text style={styles.podiumAvatarText}>
                 {leaderboard[1]?.name?.[0]?.toUpperCase() || '?'}
               </Text>
             </View>
-            <Ionicons name="medal" size={24} color={COLORS.silver} />
+            <Ionicons name="medal" size={24} color={PODIUM.silver} />
             <Text style={styles.podiumName} numberOfLines={1}>{leaderboard[1]?.name}</Text>
             <Text style={styles.podiumScore}>{leaderboard[1]?.weekly_score || 0}</Text>
-            <View style={[styles.podiumBar, { height: 60, backgroundColor: COLORS.silver + '40' }]} />
+            <View style={[styles.podiumBar, { height: 60, backgroundColor: PODIUM.silver + '40' }]} />
           </View>
 
           {/* 1st Place */}
           <View style={[styles.podiumItem, styles.podiumFirst]}>
-            <View style={[styles.podiumAvatar, { backgroundColor: COLORS.gold }]}>
+            <View style={[styles.podiumAvatar, { backgroundColor: PODIUM.gold }]}>
               <Text style={styles.podiumAvatarText}>
                 {leaderboard[0]?.name?.[0]?.toUpperCase() || '?'}
               </Text>
             </View>
-            <Ionicons name="trophy" size={32} color={COLORS.gold} />
+            <Ionicons name="trophy" size={32} color={PODIUM.gold} />
             <Text style={styles.podiumName} numberOfLines={1}>{leaderboard[0]?.name}</Text>
             <Text style={styles.podiumScore}>{leaderboard[0]?.weekly_score || 0}</Text>
-            <View style={[styles.podiumBar, { height: 80, backgroundColor: COLORS.gold + '40' }]} />
+            <View style={[styles.podiumBar, { height: 80, backgroundColor: PODIUM.gold + '40' }]} />
           </View>
 
           {/* 3rd Place */}
           <View style={[styles.podiumItem, styles.podiumThird]}>
-            <View style={[styles.podiumAvatar, { backgroundColor: COLORS.bronze }]}>
+            <View style={[styles.podiumAvatar, { backgroundColor: PODIUM.bronze }]}>
               <Text style={styles.podiumAvatarText}>
                 {leaderboard[2]?.name?.[0]?.toUpperCase() || '?'}
               </Text>
             </View>
-            <Ionicons name="medal" size={24} color={COLORS.bronze} />
+            <Ionicons name="medal" size={24} color={PODIUM.bronze} />
             <Text style={styles.podiumName} numberOfLines={1}>{leaderboard[2]?.name}</Text>
             <Text style={styles.podiumScore}>{leaderboard[2]?.weekly_score || 0}</Text>
-            <View style={[styles.podiumBar, { height: 40, backgroundColor: COLORS.bronze + '40' }]} />
+            <View style={[styles.podiumBar, { height: 40, backgroundColor: PODIUM.bronze + '40' }]} />
           </View>
         </View>
       )}
@@ -146,6 +139,25 @@ export default function LeaderboardScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
         }
       >
+        {loading && (
+          <View style={{ gap: 10 }}>
+            {[...Array(6)].map((_, i) => (
+              <View key={i} style={styles.listItem}>
+                <Skeleton width={36} height={14} radius={8} />
+                <Skeleton width={40} height={40} radius={20} style={{ marginLeft: 10 }} />
+                <View style={{ flex: 1, marginLeft: 12, gap: 8 }}>
+                  <Skeleton width={'60%'} height={14} radius={8} />
+                  <Skeleton width={'40%'} height={10} radius={8} />
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 8 }}>
+                  <Skeleton width={30} height={16} radius={8} />
+                  <Skeleton width={22} height={10} radius={8} />
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {leaderboard.slice(3).map((player, index) => {
           const rank = index + 4;
           const isMe = player.user_id === user?.user_id;
@@ -179,13 +191,11 @@ export default function LeaderboardScreen() {
         })}
 
         {leaderboard.length === 0 && !loading && (
-          <View style={styles.emptyState}>
-            <Ionicons name="trophy-outline" size={64} color={COLORS.textMuted} />
-            <Text style={styles.emptyText}>Henüz sıralama yok</Text>
-            <Text style={styles.emptyHint}>
-              Oyun oynayarak puan kazanın!
-            </Text>
-          </View>
+          <EmptyState
+            icon="trophy-outline"
+            title="Henüz sıralama yok"
+            message="Oyun oynayarak puan kazanın!"
+          />
         )}
 
         <View style={{ height: 100 }} />
@@ -347,20 +357,5 @@ const styles = StyleSheet.create({
   scoreLabel: {
     fontSize: 10,
     color: COLORS.textMuted,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingTop: 60,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-    marginTop: 16,
-  },
-  emptyHint: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    marginTop: 8,
   },
 });

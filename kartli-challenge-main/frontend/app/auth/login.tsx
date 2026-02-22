@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Platform,
   SafeAreaView,
   Dimensions,
@@ -14,20 +13,11 @@ import * as ExpoLinking from 'expo-linking';
 
 import { API_URL } from '../../src/config';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { Button } from '../../src/components/UI';
 
-const COLORS = {
-  primary: '#8B5CF6',
-  primaryLight: '#A78BFA',
-  secondary: '#F472B6',
-  accent: '#22D3EE',
-  gold: '#FBBF24',
-  background: '#0A0A1A',
-  backgroundLight: '#15152D',
-  card: '#1A1A35',
-  text: '#FFFFFF',
-  textSecondary: '#A5A5C0',
-};
+import { COLORS, theme } from '../../src/theme';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const handleGoogleLogin = async () => {
@@ -60,7 +50,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <LinearGradient
         colors={['#0A0A1A', '#15152D', '#1A1A35', '#0A0A1A']}
         style={styles.gradient}
@@ -147,19 +137,13 @@ export default function LoginScreen() {
 
         {/* Login Button */}
         <View style={styles.loginSection}>
-          <TouchableOpacity onPress={handleGoogleLogin} activeOpacity={0.9}>
-            <LinearGradient
-              colors={['#8B5CF6', '#A78BFA', '#C4B5FD']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.loginButton}
-            >
-              <View style={styles.googleIconContainer}>
-                <Text style={styles.googleIcon}>G</Text>
-              </View>
-              <Text style={styles.loginButtonText}>Google ile Giriş Yap</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+          <Button
+            title="Google ile Giriş Yap"
+            onPress={handleGoogleLogin}
+            icon="logo-google"
+            fullWidth
+            size="large"
+          />
           
           <Text style={styles.disclaimer}>
             Giriş yaparak kullanım şartlarını kabul etmiş olursunuz
@@ -194,7 +178,7 @@ export default function LoginScreen() {
           </View>
         </View>
       </LinearGradient>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -256,12 +240,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: 'center',
     letterSpacing: 0.5,
+    fontFamily: theme.fonts.display,
   },
   subtitle: {
     fontSize: 16,
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: 12,
+    fontFamily: theme.fonts.body,
   },
   featuresSection: {
     paddingVertical: 24,
@@ -289,10 +276,11 @@ const styles = StyleSheet.create({
     fontSize: 30,
   },
   featureText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
     color: COLORS.textSecondary,
+    fontWeight: '600',
     textAlign: 'center',
+    fontFamily: theme.fonts.body,
   },
   loginSection: {
     alignItems: 'center',

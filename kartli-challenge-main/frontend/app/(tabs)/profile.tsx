@@ -7,10 +7,9 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
-  TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../src/store';
@@ -18,22 +17,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { API_URL } from '../../src/config';
 
-const COLORS = {
-  primary: '#8B5CF6',
-  primaryLight: '#A78BFA',
-  secondary: '#F472B6',
-  accent: '#22D3EE',
-  gold: '#FBBF24',
-  success: '#10B981',
-  error: '#EF4444',
-  background: '#0A0A1A',
-  backgroundLight: '#15152D',
-  card: '#1A1A35',
-  cardLight: '#252550',
-  text: '#FFFFFF',
-  textSecondary: '#A5A5C0',
-  textMuted: '#6B6B8A',
-};
+import { Button, EmptyState, Input } from '../../src/components/UI';
+
+import { COLORS } from '../../src/theme';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -143,6 +129,7 @@ export default function ProfileScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.profileHeader}
           >
+            <BlurView intensity={18} tint="dark" style={StyleSheet.absoluteFill} />
             <TouchableOpacity 
               style={styles.editIconButton}
               onPress={() => {
@@ -204,10 +191,11 @@ export default function ProfileScreen() {
             </View>
             
             {notifications.length === 0 ? (
-              <View style={styles.emptyNotifications}>
-                <Text style={styles.emptyEmoji}>🔕</Text>
-                <Text style={styles.emptyText}>Bildirim yok</Text>
-              </View>
+              <EmptyState
+                icon="notifications-outline"
+                title="Bildirim yok"
+                message="Yeni bildirimler burada görünecek."
+              />
             ) : (
               notifications.slice(0, 5).map((notif) => (
                 <TouchableOpacity 
@@ -321,26 +309,23 @@ export default function ProfileScreen() {
                 <Ionicons name="close" size={24} color={COLORS.text} />
               </TouchableOpacity>
             </View>
-            
-            <Text style={styles.inputLabel}>İsim</Text>
-            <TextInput
-              style={styles.input}
+
+            <Input
+              label="İsim"
               value={editName}
               onChangeText={setEditName}
               placeholder="İsminizi girin"
-              placeholderTextColor={COLORS.textMuted}
+              icon="person-outline"
             />
-            
-            <TouchableOpacity onPress={handleEditProfile} disabled={loading}>
-              <LinearGradient
-                colors={['#8B5CF6', '#A78BFA']}
-                style={styles.saveButton}
-              >
-                <Text style={styles.saveButtonText}>
-                  {loading ? 'Kaydediliyor...' : 'Kaydet'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
+
+            <View style={{ marginTop: 14 }}>
+              <Button
+                title={loading ? 'Kaydediliyor...' : 'Kaydet'}
+                onPress={handleEditProfile}
+                loading={loading}
+                fullWidth
+              />
+            </View>
           </LinearGradient>
         </View>
       </Modal>
@@ -491,20 +476,6 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: '600',
   },
-  emptyNotifications: {
-    alignItems: 'center',
-    paddingVertical: 30,
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-  },
-  emptyEmoji: {
-    fontSize: 36,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-  },
   notificationItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -516,8 +487,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.05)',
   },
   notificationUnread: {
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    backgroundColor: 'rgba(99,102,241,0.12)',
+    borderColor: 'rgba(99,102,241,0.45)',
   },
   notificationIcon: {
     width: 48,
@@ -609,30 +580,5 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: COLORS.text,
-  },
-  inputLabel: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: COLORS.card,
-    borderRadius: 14,
-    padding: 16,
-    fontSize: 16,
-    color: COLORS.text,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
-    marginBottom: 20,
-  },
-  saveButton: {
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

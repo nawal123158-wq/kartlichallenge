@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Modal,
   RefreshControl,
   Alert,
@@ -20,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Group } from '../../src/types';
 
 import { COLORS } from '../../src/theme';
+import { Button, EmptyState, Input } from '../../src/components/UI';
 
 import { API_URL } from '../../src/config';
 
@@ -184,29 +184,17 @@ export default function GroupsScreen() {
           }
         >
           {groups.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>👥</Text>
-              <Text style={styles.emptyTitle}>Henüz grubunuz yok</Text>
-              <Text style={styles.emptyMessage}>
-                Yeni bir grup oluşturun veya davet koduyla bir gruba katılın
-              </Text>
-              <View style={styles.emptyActions}>
-                <TouchableOpacity onPress={() => setShowCreateModal(true)}>
-                  <LinearGradient
-                    colors={['#8B5CF6', '#A78BFA']}
-                    style={styles.emptyButton}
-                  >
-                    <Text style={styles.emptyButtonText}>Grup Oluştur</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.emptySecondaryButton}
-                  onPress={() => setShowJoinModal(true)}
-                >
-                  <Text style={styles.emptySecondaryButtonText}>Gruba Katıl</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            <EmptyState
+              icon="people-outline"
+              title="Henüz grubun yok"
+              message="Yeni bir grup oluştur veya davet koduyla bir gruba katıl."
+              action={
+                <View style={{ gap: 10 }}>
+                  <Button title="Grup Oluştur" onPress={() => setShowCreateModal(true)} fullWidth />
+                  <Button title="Gruba Katıl" onPress={() => setShowJoinModal(true)} variant="outline" fullWidth />
+                </View>
+              }
+            />
           ) : (
             groups.map((group) => (
               <TouchableOpacity
@@ -260,26 +248,23 @@ export default function GroupsScreen() {
                   <Ionicons name="close" size={24} color={COLORS.text} />
                 </TouchableOpacity>
               </View>
-              
-              <Text style={styles.inputLabel}>Grup Adı</Text>
-              <TextInput
-                style={styles.input}
+
+              <Input
+                label="Grup Adı"
                 value={groupName}
                 onChangeText={setGroupName}
-                placeholder="Örn: Cuma Akşamı Ekibi"
-                placeholderTextColor={COLORS.textMuted}
+                placeholder="Grup adını girin"
+                icon="people-outline"
               />
-              
-              <TouchableOpacity onPress={handleCreateGroup} disabled={loading}>
-                <LinearGradient
-                  colors={['#8B5CF6', '#A78BFA']}
-                  style={styles.modalButton}
-                >
-                  <Text style={styles.modalButtonText}>
-                    {loading ? 'Oluşturuluyor...' : 'Grup Oluştur'}
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
+
+              <View style={{ marginTop: 14 }}>
+                <Button
+                  title={loading ? 'Oluşturuluyor...' : 'Grup Oluştur'}
+                  onPress={handleCreateGroup}
+                  loading={loading}
+                  fullWidth
+                />
+              </View>
             </LinearGradient>
           </View>
         </Modal>
@@ -297,28 +282,24 @@ export default function GroupsScreen() {
                   <Ionicons name="close" size={24} color={COLORS.text} />
                 </TouchableOpacity>
               </View>
-              
-              <Text style={styles.inputLabel}>Davet Kodu</Text>
-              <TextInput
-                style={styles.input}
+
+              <Input
+                label="Davet Kodu"
                 value={inviteCode}
                 onChangeText={setInviteCode}
-                placeholder="8 haneli kod girin"
-                placeholderTextColor={COLORS.textMuted}
-                autoCapitalize="characters"
-                maxLength={8}
+                placeholder="Davet kodunu girin"
+                icon="key-outline"
               />
-              
-              <TouchableOpacity onPress={handleJoinGroup} disabled={loading}>
-                <LinearGradient
-                  colors={['#22D3EE', '#06B6D4']}
-                  style={styles.modalButton}
-                >
-                  <Text style={styles.modalButtonText}>
-                    {loading ? 'Katılınıyor...' : 'Gruba Katıl'}
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
+
+              <View style={{ marginTop: 14 }}>
+                <Button
+                  title={loading ? 'Katılınıyor...' : 'Gruba Katıl'}
+                  onPress={handleJoinGroup}
+                  loading={loading}
+                  variant="secondary"
+                  fullWidth
+                />
+              </View>
             </LinearGradient>
           </View>
         </Modal>

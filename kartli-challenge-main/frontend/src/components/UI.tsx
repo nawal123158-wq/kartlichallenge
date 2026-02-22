@@ -4,11 +4,15 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   ActivityIndicator,
+  TextInput,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Card as CardType } from '../types';
+import * as Haptics from 'expo-haptics';
 
 import { COLORS } from '../theme';
 
@@ -200,11 +204,19 @@ export const Button: React.FC<ButtonProps> = ({
   const sizeStyles = getSizeStyles();
 
   return (
-    <TouchableOpacity
-      onPress={onPress}
+    <Pressable
+      onPress={() => {
+        if (disabled || loading) return;
+        if (Platform.OS !== 'web') {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+        }
+        onPress();
+      }}
       disabled={disabled || loading}
-      activeOpacity={0.8}
-      style={[fullWidth && { width: '100%' }]}
+      style={({ pressed }) => [
+        fullWidth && { width: '100%' },
+        pressed && !(disabled || loading) && { transform: [{ scale: 0.98 }], opacity: 0.96 },
+      ]}
     >
       <LinearGradient
         colors={disabled ? ['#475569', '#475569'] : variantStyles.bg}
@@ -245,7 +257,7 @@ export const Button: React.FC<ButtonProps> = ({
           </View>
         )}
       </LinearGradient>
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
@@ -305,6 +317,9 @@ interface InputProps {
   icon?: string;
   multiline?: boolean;
   numberOfLines?: number;
+  editable?: boolean;
+  label?: string;
+  error?: string;
 }
 
 export const Input: React.FC<InputProps> = ({
@@ -315,17 +330,72 @@ export const Input: React.FC<InputProps> = ({
   icon,
   multiline,
   numberOfLines,
+  editable = true,
+  label,
+  error,
 }) => {
   return (
-    <View style={styles.inputContainer}>
-      {icon && (
-        <Ionicons name={icon as any} size={20} color={COLORS.textMuted} style={styles.inputIcon} />
-      )}
-      <View style={[styles.input, multiline && { height: 100 }]}>
-        <Text style={{ color: value ? COLORS.text : COLORS.textMuted }}>
-          {value || placeholder}
-        </Text>
+    <View style={{ width: '100%' }}>
+      {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
+      <View style={[styles.inputContainer, error && styles.inputContainerError]}>
+        {icon && (
+          <Ionicons name={icon as any} size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+        )}
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={COLORS.textMuted}
+          secureTextEntry={secureTextEntry}
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+          editable={editable}
+          selectionColor={COLORS.primary}
+          style={[styles.textInput, multiline && styles.textInputMultiline]}
+        />
       </View>
+      {error ? <Text style={styles.inputError}>{error}</Text> : null}
+    </View>
+  );
+};
+
+export const Skeleton: React.FC<{ height?: number; width?: number | string; radius?: number; style?: any }> = ({
+  height = 16,
+  width = '100%',
+  radius = 12,
+  style,
+}) => {
+  return (
+    <View
+      style={[
+        {
+          height,
+          width,
+          borderRadius: radius,
+          backgroundColor: 'rgba(148,163,184,0.12)',
+          borderWidth: 1,
+          borderColor: 'rgba(148,163,184,0.10)',
+        },
+        style,
+      ]}
+    />
+  );
+};
+
+export const EmptyState: React.FC<{ icon?: string; title: string; message?: string; action?: React.ReactNode }> = ({
+  icon = 'sparkles-outline',
+  title,
+  message,
+  action,
+}) => {
+  return (
+    <View style={styles.emptyStateContainer}>
+      <View style={styles.emptyStateIconWrap}>
+        <Ionicons name={icon as any} size={26} color={COLORS.text} />
+      </View>
+      <Text style={styles.emptyStateTitle}>{title}</Text>
+      {message ? <Text style={styles.emptyStateMessage}>{message}</Text> : null}
+      {action ? <View style={{ marginTop: 16, width: '100%' }}>{action}</View> : null}
     </View>
   );
 };
@@ -467,11 +537,69 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     paddingHorizontal: 16,
   },
+  inputContainerError: {
+    borderColor: 'rgba(239,68,68,0.55)',
+  },
+  inputLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
   inputIcon: {
     marginRight: 12,
   },
-  input: {
+  textInput: {
     flex: 1,
     paddingVertical: 14,
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  textInputMultiline: {
+    minHeight: 96,
+    textAlignVertical: 'top',
+    paddingTop: 14,
+    paddingBottom: 14,
+  },
+  inputError: {
+    marginTop: 8,
+    color: 'rgba(239,68,68,0.95)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  emptyStateContainer: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 18,
+    backgroundColor: 'rgba(17,28,51,0.65)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.16)',
+  },
+  emptyStateIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(99,102,241,0.18)',
+    marginBottom: 12,
+  },
+  emptyStateTitle: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  emptyStateMessage: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 18,
   },
 });

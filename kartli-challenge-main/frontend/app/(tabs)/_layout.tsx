@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { View, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useAuthStore, useGameStore } from '../../src/store';
 
 import { COLORS } from '../../src/theme';
@@ -27,9 +28,12 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarBackground: () => (
+          <BlurView intensity={24} tint="dark" style={{ flex: 1 }} />
+        ),
         tabBarStyle: {
-          backgroundColor: COLORS.card,
-          borderTopColor: '#2A2A4A',
+          backgroundColor: 'transparent',
+          borderTopColor: 'rgba(148,163,184,0.18)',
           borderTopWidth: 1,
           height: Platform.OS === 'ios' ? 90 : 70,
           paddingBottom: Platform.OS === 'ios' ? 30 : 10,
