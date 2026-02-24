@@ -255,6 +255,9 @@ class SendFriendRequestRequest(BaseModel):
 
 class CreateGameRequest(BaseModel):
     group_id: str
+    hand_time_limit_seconds: Optional[int] = None
+    max_hands: Optional[int] = None
+    difficulty_level: Optional[int] = None
 
 class PlayCardRequest(BaseModel):
     card_id: str
@@ -273,6 +276,19 @@ class SwapCardRequest(BaseModel):
 
 class SelectCardRequest(BaseModel):
     card_id: str
+
+class CreateDMConversationRequest(BaseModel):
+    userId: str
+    message: Optional[str] = ""
+
+class SendDMMessageRequest(BaseModel):
+    content: str
+    type: str = "text"
+    replyTo: Optional[str] = None
+
+class SendDMRequestModel(BaseModel):
+    userId: str
+    message: Optional[str] = None
 
 # ==================== AUTH HELPERS ====================
 
@@ -882,6 +898,19 @@ async def create_game(req: CreateGameRequest, current_user: User = Depends(get_c
     if active_game:
         raise HTTPException(status_code=400, detail="A game is already in progress")
     
+    # Room settings
+    hand_time_limit_seconds = int(req.hand_time_limit_seconds) if req.hand_time_limit_seconds else 60
+    max_hands = int(req.max_hands) if req.max_hands else 3
+
+    difficulty_level = int(req.difficulty_level) if req.difficulty_level else 2
+
+    if hand_time_limit_seconds < 15 or hand_time_limit_seconds > 300:
+        raise HTTPException(status_code=400, detail="hand_time_limit_seconds must be between 15 and 300")
+    if max_hands < 1 or max_hands > 10:
+        raise HTTPException(status_code=400, detail="max_hands must be between 1 and 10")
+    if difficulty_level < 1 or difficulty_level > 3:
+        raise HTTPException(status_code=400, detail="difficulty_level must be between 1 and 3")
+
     game = {
         "game_id": f"game_{uuid.uuid4().hex[:12]}",
         "group_id": req.group_id,
@@ -891,6 +920,9 @@ async def create_game(req: CreateGameRequest, current_user: User = Depends(get_c
         "created_by": current_user.user_id,
         "created_at": datetime.now(timezone.utc),
         "finished_at": None,
+        "hand_time_limit_seconds": hand_time_limit_seconds,
+        "max_hands": max_hands,
+        "difficulty_level": difficulty_level,
         # --- SIRAYLA KART SEÇME İÇİN ---
         "players": [],            # oyundaki oyuncular
         "turn_order": [],         # sıra listesi (user_id'ler)
@@ -1186,6 +1218,8 @@ async def start_game(request: Request, game_id: str, current_user: User = Depend
 
 async def deal_cards_for_hand(game_id: str, hand_number: int):
     """Deal 3 cards to each player for a hand (3 hands: 1-2 normal, 3 penalty)"""
+    game = await db.games.find_one({"game_id": game_id}, {"_id": 0})
+    difficulty_level = int((game or {}).get("difficulty_level", 2) or 2)
     players = await db.game_players.find({"game_id": game_id}, {"_id": 0}).to_list(100)
     
     # Determine card deck based on hand number
@@ -1193,10 +1227,13 @@ async def deal_cards_for_hand(game_id: str, hand_number: int):
         # Hand 3: Penalty cards only
         deck_types = ["ceza"]
     else:
-        # Hands 1-2: Normal cards
+        # Hands 1-2: Normal decks + 1 penalty card
         deck_types = ["komik", "sosyal", "beceri", "cevre"]
     
-    all_cards = await db.cards.find({"deck_type": {"$in": deck_types}}, {"_id": 0}).to_list(1000)
+    cards_query = {"deck_type": {"$in": deck_types}}
+    if hand_number != 3:
+        cards_query["difficulty"] = {"$lte": difficulty_level}
+    all_cards = await db.cards.find(cards_query, {"_id": 0}).to_list(1000)
     penalty_cards = []
     if hand_number in [1, 2]:
         penalty_cards = await db.cards.find({"deck_type": "ceza"}, {"_id": 0}).to_list(1000)
@@ -1375,14 +1412,15 @@ async def play_card(request: Request, game_id: str, req: PlayCardRequest, curren
             if current_player_id != current_user.user_id:
                 raise HTTPException(status_code=400, detail="Not your turn")
 
-    # CHECK HAND TIME LIMIT (60 seconds per hand - auto pass if exceeded)
+    # CHECK HAND TIME LIMIT
     now = datetime.now(timezone.utc)
     hand_started = game.get("hand_started_at")
     if hand_started:
         if hand_started.tzinfo is None:
             hand_started = hand_started.replace(tzinfo=timezone.utc)
         hand_elapsed = (now - hand_started).total_seconds()
-        if hand_elapsed > 60:
+        limit_seconds = int(game.get("hand_time_limit_seconds", 60) or 60)
+        if hand_elapsed > limit_seconds:
             raise HTTPException(status_code=400, detail="Hand time limit exceeded - time to move to next hand")
     
     # Find the hand card
@@ -1613,9 +1651,10 @@ async def swap_card(request: Request, game_id: str, req: SwapCardRequest, curren
     await db.hand_cards.delete_one({"hand_card_id": hand_card["hand_card_id"]})
     
     # Get a new random card
+    difficulty_level = int(game.get("difficulty_level", 2) or 2)
     deck_types = ["komik", "sosyal", "beceri", "cevre"]
     new_card = await db.cards.aggregate([
-        {"$match": {"deck_type": {"$in": deck_types}, "card_id": {"$ne": req.card_id}}},
+        {"$match": {"deck_type": {"$in": deck_types}, "difficulty": {"$lte": difficulty_level}, "card_id": {"$ne": req.card_id}}},
         {"$sample": {"size": 1}}
     ]).to_list(1)
     
@@ -1685,7 +1724,8 @@ async def check_hand_completion(game_id: str):
     next_hand = current_hand + 1
     now = datetime.now(timezone.utc)
 
-    if next_hand > 3:
+    max_hands = int(game.get("max_hands", 3) or 3)
+    if next_hand > max_hands:
         # Finish game
         await db.games.update_one(
             {"game_id": game_id},
@@ -1743,7 +1783,7 @@ async def check_hand_completion(game_id: str):
 # ==================== VOTING ENDPOINTS ====================
 
 VOTE_TIMEOUT_SECONDS = int(os.environ.get("VOTE_TIMEOUT_SECONDS", "60"))
-MIN_VOTES_REQUIRED = int(os.environ.get("MIN_VOTES_REQUIRED", "2"))
+MIN_VOTES_REQUIRED = int(os.environ.get("MIN_VOTES_REQUIRED", "1"))
 
 async def resolve_submission(submission_id: str) -> Optional[dict]:
     submission = await db.submissions.find_one({"submission_id": submission_id}, {"_id": 0})
@@ -1760,34 +1800,49 @@ async def resolve_submission(submission_id: str) -> Optional[dict]:
     votes_reject = int(submission.get("votes_reject", 0))
     votes_total = votes_approve + votes_reject
 
+    has_proof = bool(submission.get("photo_base64"))
+
     min_required = min(MIN_VOTES_REQUIRED, eligible_voters) if eligible_voters > 0 else 0
-    majority_needed = (eligible_voters // 2) + 1 if eligible_voters > 0 else 1
 
-    created_at = submission.get("created_at")
-    if created_at and getattr(created_at, "tzinfo", None) is None:
-        created_at = created_at.replace(tzinfo=timezone.utc)
-    now = datetime.now(timezone.utc)
-    timed_out = False
-    if created_at:
-        timed_out = (now - created_at).total_seconds() >= VOTE_TIMEOUT_SECONDS
+    # Tek oy ile karar verilir: 1 onay = kabul, 1 ret = red
+    # Video/fotoğraf kanıtı varsa tek onay yeterli
+    if has_proof and votes_approve >= 1:
+        should_approve = True
+        should_reject = False
+    elif votes_approve >= 1 and votes_reject == 0:
+        should_approve = True
+        should_reject = False
+    elif votes_reject >= 1 and votes_approve == 0:
+        should_approve = False
+        should_reject = True
+    elif votes_total >= eligible_voters and eligible_voters > 0:
+        should_approve = votes_approve > votes_reject
+        should_reject = not should_approve
+    else:
+        should_approve = False
+        should_reject = False
 
-    should_approve = votes_approve >= majority_needed
-    should_reject = votes_reject >= majority_needed
-
+    # Timeout kontrolü
     if not should_approve and not should_reject:
-        if eligible_voters > 0 and votes_total >= eligible_voters:
-            if votes_approve > votes_reject:
-                should_approve = True
-            else:
-                should_reject = True
-        elif timed_out:
+        created_at = submission.get("created_at")
+        if created_at and getattr(created_at, "tzinfo", None) is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        timed_out = False
+        if created_at:
+            timed_out = (now - created_at).total_seconds() >= VOTE_TIMEOUT_SECONDS
+
+        if timed_out:
             if votes_total == 0:
-                should_reject = True
-            elif votes_total >= min_required:
-                if votes_approve > votes_reject:
+                # Kanıt varsa timeout'ta otomatik onayla, yoksa reddet
+                if has_proof:
                     should_approve = True
                 else:
                     should_reject = True
+            elif votes_approve >= votes_reject:
+                should_approve = True
+            else:
+                should_reject = True
 
     if not should_approve and not should_reject:
         return submission
@@ -2057,6 +2112,405 @@ async def get_game_penalties(game_id: str, current_user: User = Depends(get_curr
         p["card"] = card
     
     return penalties
+
+# ==================== PROFILE ENDPOINTS ====================
+
+@api_router.put("/users/profile")
+async def update_profile(request: Request, current_user: User = Depends(get_current_user)):
+    """Update user profile (name, bio, picture)"""
+    body = await request.json()
+    
+    update_fields = {}
+    if "name" in body and body["name"] and body["name"].strip():
+        name = body["name"].strip()
+        if len(name) < 2 or len(name) > 50:
+            raise HTTPException(status_code=400, detail="Name must be between 2 and 50 characters")
+        update_fields["name"] = name
+    
+    if "bio" in body:
+        bio = (body["bio"] or "").strip()
+        if len(bio) > 200:
+            raise HTTPException(status_code=400, detail="Bio must be less than 200 characters")
+        update_fields["bio"] = bio
+    
+    if "picture" in body:
+        update_fields["picture"] = body["picture"]
+    
+    if not update_fields:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": update_fields}
+    )
+    
+    updated_user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    return updated_user
+
+@api_router.post("/users/profile-image")
+async def upload_profile_image(request: Request, current_user: User = Depends(get_current_user)):
+    """Upload profile image as base64"""
+    body = await request.json()
+    image_data = body.get("image")
+    
+    if not image_data:
+        raise HTTPException(status_code=400, detail="No image provided")
+    
+    # Store base64 image directly in user document
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": {"picture": image_data}}
+    )
+    
+    return {"imageUrl": image_data}
+
+# ==================== DM ENDPOINTS ====================
+
+@api_router.get("/dm/conversations")
+async def get_dm_conversations(current_user: User = Depends(get_current_user)):
+    """Get all DM conversations for current user"""
+    convs = await db.dm_conversations.find(
+        {"participants": current_user.user_id},
+        {"_id": 0}
+    ).sort("last_activity", -1).to_list(100)
+    
+    result = []
+    for conv in convs:
+        other_id = [p for p in conv["participants"] if p != current_user.user_id]
+        other_user_id = other_id[0] if other_id else current_user.user_id
+        other_user = await db.users.find_one({"user_id": other_user_id}, {"_id": 0})
+        
+        last_msg_cursor = db.dm_messages.find(
+            {"conversation_id": conv["conversation_id"]},
+            {"_id": 0}
+        ).sort("timestamp", -1).limit(1)
+        last_msgs = await last_msg_cursor.to_list(1)
+        last_msg = last_msgs[0] if last_msgs else None
+        
+        unread = await db.dm_messages.count_documents({
+            "conversation_id": conv["conversation_id"],
+            "from_user_id": {"$ne": current_user.user_id},
+            "is_read": False
+        })
+        
+        result.append({
+            "id": conv["conversation_id"],
+            "participant": {
+                "userId": other_user_id,
+                "name": other_user["name"] if other_user else "Unknown",
+                "avatar": other_user.get("picture") if other_user else None,
+                "isOnline": False,
+                "lastSeen": None,
+                "isTyping": False,
+            },
+            "lastMessage": {
+                "id": last_msg["message_id"],
+                "conversationId": last_msg["conversation_id"],
+                "fromUserId": last_msg["from_user_id"],
+                "fromUserName": last_msg.get("from_user_name", ""),
+                "content": last_msg["content"],
+                "type": last_msg.get("type", "text"),
+                "timestamp": last_msg["timestamp"].isoformat() if isinstance(last_msg["timestamp"], datetime) else last_msg["timestamp"],
+                "isRead": last_msg.get("is_read", False),
+                "isDelivered": True,
+                "isEdited": False,
+            } if last_msg else None,
+            "unreadCount": unread,
+            "isArchived": conv.get("is_archived", False),
+            "isPinned": conv.get("is_pinned", False),
+            "isMuted": conv.get("is_muted", False),
+            "createdAt": conv["created_at"].isoformat() if isinstance(conv["created_at"], datetime) else conv["created_at"],
+            "lastActivity": conv["last_activity"].isoformat() if isinstance(conv["last_activity"], datetime) else conv["last_activity"],
+        })
+    
+    return result
+
+@api_router.get("/dm/conversations/search")
+async def search_dm_conversations(q: str, current_user: User = Depends(get_current_user)):
+    """Search conversations"""
+    convs = await db.dm_conversations.find(
+        {"participants": current_user.user_id},
+        {"_id": 0}
+    ).to_list(100)
+    
+    result = []
+    for conv in convs:
+        other_id = [p for p in conv["participants"] if p != current_user.user_id]
+        other_user_id = other_id[0] if other_id else current_user.user_id
+        other_user = await db.users.find_one({"user_id": other_user_id}, {"_id": 0})
+        
+        if other_user and q.lower() in other_user["name"].lower():
+            result.append({
+                "id": conv["conversation_id"],
+                "participant": {
+                    "userId": other_user_id,
+                    "name": other_user["name"],
+                    "avatar": other_user.get("picture"),
+                    "isOnline": False,
+                    "lastSeen": None,
+                    "isTyping": False,
+                },
+                "lastMessage": None,
+                "unreadCount": 0,
+                "isArchived": conv.get("is_archived", False),
+                "isPinned": conv.get("is_pinned", False),
+                "isMuted": conv.get("is_muted", False),
+                "createdAt": conv["created_at"].isoformat() if isinstance(conv["created_at"], datetime) else conv["created_at"],
+                "lastActivity": conv["last_activity"].isoformat() if isinstance(conv["last_activity"], datetime) else conv["last_activity"],
+            })
+    
+    return result
+
+@api_router.post("/dm/conversations")
+async def create_dm_conversation(req: CreateDMConversationRequest, current_user: User = Depends(get_current_user)):
+    """Create a new DM conversation"""
+    target_user = await db.users.find_one({"user_id": req.userId}, {"_id": 0})
+    if not target_user:
+        target_user = await db.users.find_one({"player_id": req.userId.upper()}, {"_id": 0})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if target_user["user_id"] == current_user.user_id:
+        raise HTTPException(status_code=400, detail="Cannot message yourself")
+    
+    existing = await db.dm_conversations.find_one({
+        "participants": {"$all": [current_user.user_id, target_user["user_id"]]}
+    }, {"_id": 0})
+    
+    if existing:
+        conv_id = existing["conversation_id"]
+    else:
+        conv_id = f"dm_{uuid.uuid4().hex[:12]}"
+        now = datetime.now(timezone.utc)
+        conv = {
+            "conversation_id": conv_id,
+            "participants": [current_user.user_id, target_user["user_id"]],
+            "created_at": now,
+            "last_activity": now,
+            "is_archived": False,
+            "is_pinned": False,
+            "is_muted": False,
+        }
+        await db.dm_conversations.insert_one(conv)
+    
+    if req.message and req.message.strip():
+        msg_id = f"msg_{uuid.uuid4().hex[:12]}"
+        now = datetime.now(timezone.utc)
+        msg = {
+            "message_id": msg_id,
+            "conversation_id": conv_id,
+            "from_user_id": current_user.user_id,
+            "from_user_name": current_user.name,
+            "content": req.message.strip(),
+            "type": "text",
+            "timestamp": now,
+            "is_read": False,
+        }
+        await db.dm_messages.insert_one(msg)
+        await db.dm_conversations.update_one(
+            {"conversation_id": conv_id},
+            {"$set": {"last_activity": now}}
+        )
+    
+    return {
+        "id": conv_id,
+        "participant": {
+            "userId": target_user["user_id"],
+            "name": target_user["name"],
+            "avatar": target_user.get("picture"),
+            "isOnline": False,
+            "lastSeen": None,
+            "isTyping": False,
+        },
+        "lastMessage": None,
+        "unreadCount": 0,
+        "isArchived": False,
+        "isPinned": False,
+        "isMuted": False,
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "lastActivity": datetime.now(timezone.utc).isoformat(),
+    }
+
+@api_router.get("/dm/conversations/{conversation_id}/messages")
+async def get_dm_messages(conversation_id: str, current_user: User = Depends(get_current_user)):
+    """Get messages for a conversation"""
+    conv = await db.dm_conversations.find_one(
+        {"conversation_id": conversation_id, "participants": current_user.user_id},
+        {"_id": 0}
+    )
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    msgs = await db.dm_messages.find(
+        {"conversation_id": conversation_id},
+        {"_id": 0}
+    ).sort("timestamp", 1).to_list(200)
+    
+    result = []
+    for m in msgs:
+        result.append({
+            "id": m["message_id"],
+            "conversationId": m["conversation_id"],
+            "fromUserId": m["from_user_id"],
+            "fromUserName": m.get("from_user_name", ""),
+            "fromUserAvatar": m.get("from_user_avatar"),
+            "content": m["content"],
+            "type": m.get("type", "text"),
+            "timestamp": m["timestamp"].isoformat() if isinstance(m["timestamp"], datetime) else m["timestamp"],
+            "isRead": m.get("is_read", False),
+            "isDelivered": True,
+            "isEdited": m.get("is_edited", False),
+        })
+    
+    return result
+
+@api_router.post("/dm/conversations/{conversation_id}/messages")
+async def send_dm_message(conversation_id: str, req: SendDMMessageRequest, current_user: User = Depends(get_current_user)):
+    """Send a message in a conversation"""
+    conv = await db.dm_conversations.find_one(
+        {"conversation_id": conversation_id, "participants": current_user.user_id},
+        {"_id": 0}
+    )
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    msg_id = f"msg_{uuid.uuid4().hex[:12]}"
+    now = datetime.now(timezone.utc)
+    msg = {
+        "message_id": msg_id,
+        "conversation_id": conversation_id,
+        "from_user_id": current_user.user_id,
+        "from_user_name": current_user.name,
+        "from_user_avatar": current_user.picture,
+        "content": req.content,
+        "type": req.type,
+        "timestamp": now,
+        "is_read": False,
+        "is_edited": False,
+        "reply_to": req.replyTo,
+    }
+    await db.dm_messages.insert_one(msg)
+    
+    await db.dm_conversations.update_one(
+        {"conversation_id": conversation_id},
+        {"$set": {"last_activity": now}}
+    )
+    
+    return {
+        "id": msg_id,
+        "conversationId": conversation_id,
+        "fromUserId": current_user.user_id,
+        "fromUserName": current_user.name,
+        "fromUserAvatar": current_user.picture,
+        "content": req.content,
+        "type": req.type,
+        "timestamp": now.isoformat(),
+        "isRead": False,
+        "isDelivered": True,
+        "isEdited": False,
+        "replyTo": req.replyTo,
+    }
+
+@api_router.post("/dm/conversations/{conversation_id}/read")
+async def mark_dm_read(conversation_id: str, current_user: User = Depends(get_current_user)):
+    """Mark messages as read"""
+    await db.dm_messages.update_many(
+        {
+            "conversation_id": conversation_id,
+            "from_user_id": {"$ne": current_user.user_id},
+            "is_read": False,
+        },
+        {"$set": {"is_read": True}}
+    )
+    return {"status": "ok"}
+
+@api_router.get("/dm/requests")
+async def get_dm_requests(current_user: User = Depends(get_current_user)):
+    """Get pending DM requests"""
+    reqs = await db.dm_requests.find(
+        {"to_user_id": current_user.user_id, "status": "pending"},
+        {"_id": 0}
+    ).to_list(50)
+    
+    result = []
+    for r in reqs:
+        from_user = await db.users.find_one({"user_id": r["from_user_id"]}, {"_id": 0})
+        result.append({
+            "id": r["request_id"],
+            "fromUserId": r["from_user_id"],
+            "fromUserName": from_user["name"] if from_user else "Unknown",
+            "fromUserAvatar": from_user.get("picture") if from_user else None,
+            "message": r.get("message"),
+            "status": r["status"],
+            "createdAt": r["created_at"].isoformat() if isinstance(r["created_at"], datetime) else r["created_at"],
+        })
+    
+    return result
+
+@api_router.post("/dm/requests/{request_id}/accept")
+async def accept_dm_request(request_id: str, current_user: User = Depends(get_current_user)):
+    """Accept a DM request"""
+    req = await db.dm_requests.find_one(
+        {"request_id": request_id, "to_user_id": current_user.user_id},
+        {"_id": 0}
+    )
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    await db.dm_requests.update_one(
+        {"request_id": request_id},
+        {"$set": {"status": "accepted", "responded_at": datetime.now(timezone.utc)}}
+    )
+    
+    conv_id = f"dm_{uuid.uuid4().hex[:12]}"
+    now = datetime.now(timezone.utc)
+    conv = {
+        "conversation_id": conv_id,
+        "participants": [current_user.user_id, req["from_user_id"]],
+        "created_at": now,
+        "last_activity": now,
+        "is_archived": False,
+        "is_pinned": False,
+        "is_muted": False,
+    }
+    await db.dm_conversations.insert_one(conv)
+    
+    from_user = await db.users.find_one({"user_id": req["from_user_id"]}, {"_id": 0})
+    
+    return {
+        "id": conv_id,
+        "participant": {
+            "userId": req["from_user_id"],
+            "name": from_user["name"] if from_user else "Unknown",
+            "avatar": from_user.get("picture") if from_user else None,
+            "isOnline": False,
+            "lastSeen": None,
+            "isTyping": False,
+        },
+        "lastMessage": None,
+        "unreadCount": 0,
+        "isArchived": False,
+        "isPinned": False,
+        "isMuted": False,
+        "createdAt": now.isoformat(),
+        "lastActivity": now.isoformat(),
+    }
+
+@api_router.post("/dm/requests/{request_id}/decline")
+async def decline_dm_request(request_id: str, current_user: User = Depends(get_current_user)):
+    """Decline a DM request"""
+    req = await db.dm_requests.find_one(
+        {"request_id": request_id, "to_user_id": current_user.user_id},
+        {"_id": 0}
+    )
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    await db.dm_requests.update_one(
+        {"request_id": request_id},
+        {"$set": {"status": "declined", "responded_at": datetime.now(timezone.utc)}}
+    )
+    return {"status": "ok"}
 
 # ==================== MAIN ROUTES ====================
 
